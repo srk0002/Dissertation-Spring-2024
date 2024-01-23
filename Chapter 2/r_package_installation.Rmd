@@ -1,0 +1,47 @@
+##Data Manipulation##
+install.packages("tidyverse") 
+#tidyverse contains many packages for data manipulation, graphs etc
+install.packages("splitstackshape")
+#Really nice syntax for expanding datasets
+
+#Basic Epi
+install.packages("epiR") 
+#Some useful epitools especially 2*2 tables and stratified MH Odds
+install.packages("lmtest") 
+#for doing likelihood ratio tests between models 
+
+#Poisson & Cox Regression & Survival Analysis
+install.packages("Epi") 
+#Tools for Lexis Models
+install.packages("popEpi")
+#Extra tools to go with 'Epi' and make nice rate tables
+install.packages("survival") 
+#for survial analysis, kaplan-meier plots and cox regression
+install.packages("survminer")
+#Really nice KM plots!
+
+#Random-Effects Modeks
+install.packages("lme4")
+#For fitting random-effects models
+install.packages("sjstats")
+#For intraclass correlation coeffiecients from Random-effects models
+
+#Multiple Imputation
+install.packages("mice")
+#For multiple imputation
+
+install.packages("arsenal")
+#Really nice summmary tables
+
+#Complex survey data analysis
+install.packages("survey")
+#For handling complex survey data
+install.packages("ICC")
+#Alternative methods for ICC calculation from survey data
+
+#Meta-analysis
+install.packages("meta")
+install.packages("metafor")
+
+#Make saving your models easier
+install.packages("broom.mixed")
