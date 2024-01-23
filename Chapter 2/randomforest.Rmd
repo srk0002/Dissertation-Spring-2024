@@ -1,0 +1,157 @@
+---
+title: "Randomforest"
+original script authors: "Tahir Bachar Issa and Zheran (Rachel) Wang"
+date: "November 1, 2018"
+output: html_document
+---
+
+
+
+```{r}
+setwd("D:/1WORK/Class/7250/MCMC/jags-exercises-master")
+sam<-read.csv("Environmental Project Compiled Information.csv",na.strings=c("", "NA", "NULL"),stringsAsFactors = T)
+str(sam)
+```
+
+
+
+#libraries
+```{r}
+library(dplyr) # for data manipulation
+library(caret) # for model-building
+library(DMwR) # for smote implementation
+library(purrr) # for functional programming (map)
+library(pROC) # for AUC calculations
+```
+
+#Training and test data set
+```{r}
+library(caret)
+
+
+set.seed(4650)
+trainIndex <- createDataPartition(sam$Salmonella_Positive, 
+                                  p = .8, 
+                                  list = FALSE, 
+                                  times = 1)
+
+Train <- sam[ trainIndex,]
+Test  <- sam[-trainIndex,]
+dim(Test)
+
+```
+
+
+
+```{r}
+names(Train)
+myvars <- names(Train) %in% c("Date","Year","Sample","Water_Source" ) 
+newdata <- Train[!myvars]
+
+myvars <- names(Test) %in% c("Date","Year","Sample","Water_Source" ) 
+Test <- Test[!myvars]
+names(newdata)
+```
+
+```{r}
+# Set up control function for training
+
+
+set.seed(123)
+seeds <- vector(mode = "list", length = 51)
+for(i in 1:50) seeds[[i]] <- sample.int(1000, 22) 
+## For the last model:
+seeds[[51]] <- sample.int(1000, 1)
+
+ctrl <- trainControl(method = "repeatedcv",
+                     number = 10,
+                     repeats = 5,
+                     summaryFunction = twoClassSummary,
+                     seeds=seeds,
+                     classProbs = TRUE)
+
+# Build a standard classifier using a gradient boosted machine
+
+sam$Salmonella_Positive<-relevel(sam$Salmonella_Positive,ref="No")
+RF_mod <- train(Salmonella_Positive ~ .,
+                  data = newdata,
+                  method = "rf",
+                metric="ROC",
+                  verbose = FALSE,
+                 ntrees=10000,
+                  trControl = ctrl)
+
+#str(newdata)
+```
+
+```{r}
+RF_mod
+```
+
+#function needed
+
+```{r}
+test_roc <- function(model, data) {
+  
+  roc(data$Salmonella_Positive,
+      predict(model,data, type = "prob")[, "Yes"])
+
+}
+```
+
+
+
+```{r}
+
+RF_mod %>%
+  test_roc(data = Test) %>%
+  auc()
+```
+
+
+
+#predicting test data with default 0.5
+```{r}
+
+confusionMatrix(predict(RF_mod, Test), Test$Salmonella_Positive,positive = "Yes")
+
+```
+
+
+
+#variable importance
+
+```{r}
+ 
+imp <- RF_mod$finalModel$importance 
+imp[order(imp, decreasing = TRUE), ] 
+
+# estimate variable importance
+importance <- varImp(RF_mod, scale = TRUE)
+plot(importance)
+```
+
+
+
+```{r}
+#forest.model <- train(Species ~., data.train)
+library(caret)
+library(pROC)
+result.predicted.prob <- predict(RF_mod, Test, type="prob") # Prediction
+
+result.roc <- roc(Test$Salmonella_Positive, result.predicted.prob$Yes) # Draw ROC curve.
+plot(result.roc, print.thres="best", print.thres.best.method="closest.topleft")
+
+result.coords <- coords(result.roc, "best", best.method="closest.topleft", ret=c("threshold", "accuracy"))
+print(result.coords)#to get threshold and accuracy
+```
+
+
+```{r}
+probsTest <- predict(RF_mod, Test, type = "prob")
+threshold <- 0.561
+pred      <- factor( ifelse(probsTest[, "Yes"] > threshold, "Yes", "No") )
+pred      <- relevel(pred, "No")   # you may or may not need this; I did
+confusionMatrix(pred, Test$Salmonella_Positive,positive="Yes")
+```
+
