@@ -1,0 +1,193 @@
+---
+title: "MCMC"
+authors: "Zheran (Rachel) Wang and Steven Kitchens"
+date: "November 8, 2018"
+output: html_document
+---
+
+```{r}
+
+# SET THE WORKING DIRECTORY TO THE LOCATION OF THIS FILE
+# Session > Set Working Directory > To Source File Location
+setwd("D:/1WORK/Class/7250/MCMC/jags-exercises-master")
+# clear the workspace
+rm(list = ls(all = T))
+
+```
+# load packages and functions
+```{r}
+# load packages and functions
+library(rjags)
+library(R2OpenBUGS)
+source("z-post-summ.R")
+```
+
+
+##### READ AND PREPARE DATA #####
+```{r}
+##### READ AND PREPARE DATA #####
+
+sam <- read.csv("Environmental Project Compiled Information.csv", stringsAsFactors = T)
+
+
+```
+
+
+##Dummies
+```{r}
+
+sam$Salmonella_Positive<-ifelse(sam$Salmonella_Positive=='Yes', 1,0)
+sum(sam$Salmonella_Positive)
+mean(sam$Salmonella_Positive==1)
+##do Salm postive by hand, so that yes will be 1
+
+#revomve variable dont want
+names(sam)
+myvars <- names(sam) %in% c("Date","Year","Sample","Water_Source" )
+Dsam <- newdata <- sam[!myvars]
+#create dummy
+Ds <- fastDummies::dummy_cols(Dsam)
+
+sum(Ds$Season_Winter)
+```
+#create train data
+```{r}
+library(caret)
+set.seed(4650)
+index.train <- createDataPartition(Ds$Salmonella_Positive, 
+                                  p = .8, 
+                                  list = FALSE, 
+                                  times = 1)
+dim(train)
+train <- Ds[index.train,]
+```
+
+#mcmc
+```{r}
+
+# put into a list to pass to JAGS
+pred.x = seq(5, 12, 0.5)
+train <- as.data.frame(train)
+jags.sam = list(y = train$Salmonella_Positive, 
+                spring = train$Season_Spring, winter = train$Season_Winter, summer=train$Season_Summer, 
+                dariy = train$Region_Dairy, lab = train$Region_Lab_Animal_Health,
+                northauburn = train$Region_North_Auburn, foodani = train$Region_Food_Animal_Barn,
+                horse = train$Region_Equine,
+                bovine = train$Species_Bovine, domlargeani = train$Species_Domestic_large_animal, 
+                equine = train$Species_Equine,
+                condition = train$Condition_Rain, 
+                surface = train$Sample_Method_Surface, Drain = train$Sample_Method_Drain, 
+                Fecal=train$Sample_Method_Fecal, water = train$Sample_Method_Water,
+                n.obs = nrow(train))
+
+```
+## SPECIFY MODEL CODE #
+```{r}
+  mod = function() {
+  # PRIORS
+  b0 ~ dnorm(0, 1e-6)
+  b1 ~ dnorm(0, 1e-6)
+  b2 ~ dnorm(0, 1e-6)
+  b3 ~ dnorm(0, 1e-6)
+  b4 ~ dnorm(0, 1e-6)
+  b5 ~ dnorm(0, 1e-6)
+  b6 ~ dnorm(0, 1e-6)
+  b7 ~ dnorm(0, 1e-6)
+  b8 ~ dnorm(0, 1e-6)
+  b9 ~ dnorm(0, 1e-6)
+  b10 ~ dnorm(0, 1e-6)
+  b11 ~ dnorm(0, 1e-6)
+  b12 ~ dnorm(0, 1e-6)
+  b13 ~ dnorm(0, 1e-6)
+  b14 ~ dnorm(0, 1e-6)
+  b15 ~ dnorm(0, 1e-6)
+  b16 ~ dnorm(0, 1e-6)
+  
+  
+  # LIKELIHOOD
+  for (i in 1:n.obs) {
+    y[i] ~ dbern(p[i])
+    # logit(p[i]) <- b0 + b1 * season[i] + b2 * region[i] + b3* species[i] +
+      # b4 * condition[i] + b5 * sample_method[i]
+    logit(p[i]) <- b0 + b1*spring[i] + b2*winter[i] + b3*summer[i] + b4*dariy[i] + b5*lab[i] +
+      b6*northauburn[i] + b7*foodani[i] +b8*horse[i] + b9*bovine[i] + b10*domlargeani[i] + 
+      b11*equine[i] + b12*condition[i] +
+      b13*surface[i] + b14*Drain[i] + b15*Fecal[i] + b16*water[i] 
+  }
+  
+  # DERIVED QUANTITIES
+#  for (i in 1:n.pred) {
+ #   logit(pred.p[i]) <- b0 + b1 * pred.x[i]
+  #}
+  
+  }
+```
+## write model to a text file
+```{r}
+model.file = "projec-mcmc.txt"
+write.model(mod, model.file)
+```
+##### INITIAL VALUES #####
+```{r}
+inits1 = list(b0=-7,b1=0,b2=0.7,b3=0,b4=0, b5=0,b6=0,b7=0,b8=0,b9=0,b10=0,b11=0,b12=0,b13=0,b14=0,b15=0,b16=0)
+inits2 = list(b0=-9,b1=0,b2 =0.7,b3=0,b4=0, b5=0,b6=0,b7=0,b8=0,b9=0,b10=0,b11=0,b12=0,b13=0,b14=0,b15=0,b16=0)
+inits = list(inits1, inits2)
+##### PARAMETERS TO MONITOR #####
+#params = c("b0", "b1","b2", "b3", "b4", "b5")
+params = c("b0", "b1","b2","b3","b4","b5","b6","b7","b8","b9","b10","b11","b12","b13","b14","b15","b16")
+
+##### MCMC DIMENSIONS #####
+ni = 5000  # number of post-burn-in samples per chain
+nb = 1000  # number of burn-in samples
+nt = 1     # thinning rate
+nc = 2     # number of chains
+
+
+```
+
+##### RUN THE MODEL IN JAGS #####
+```{r}
+jmod = jags.model(file = model.file, data = jags.sam, n.chains = nc, inits = inits, n.adapt = 1000)
+update(jmod, n.iter = nb, by = 1, progress.bar = 'text')
+post = coda.samples(jmod, params, n.iter = ni, thin = nt)
+```
+
+# summarize the posteriors
+```{r}
+summary(post)
+```
+
+
+
+#test the model
+###totally stuck
+##end up choosing b0, b3, b4, b7, b9, b12, b13, b14, b15, b16
+```{r}
+#get test set
+test <- Ds[-index.train,]
+#confusionMatrix(predict(SamlogitR2, test), test$Salmonella_Positive)
+#model
+MCMCmodel <- -6.21136 + 0.64976*test$Season_Summer + 4.58051*test$Region_Dairy + 3.36175*test$Region_Food_Animal_Barn + 1.35730*test$Species_Bovine +-0.62271*test$Condition_Rain +0.99572*test$Sample_Method_Surface + 2.48687*test$Sample_Method_Drain + 2.13229*test$Sample_Method_Fecal + 2.82124*test$Sample_Method_Water
+
+
+MCMCprd <- exp(MCMCmodel)/(1+exp(MCMCmodel))
+
+```
+#predicting test data with proportion of yes
+
+```{r}
+
+fitted.results <- ifelse(MCMCprd > 0.39,1, 0)
+table(test$Salmonella_Positive, fitted.results)
+misClasificError <- mean(fitted.results != test$Salmonella_Positive)
+print(paste('Accuracy',1-misClasificError))
+```
+
+```{r}
+sensitivity <- 55/(55+28)
+specificity <- 86/(86+8)
+sensitivity
+specificity
+```
+
+
